@@ -5,7 +5,6 @@
 #@contributors @chrismo
 
 require 'rubygems'
-require 'json/add/core'
 require 'uri'
 require 'net/https'
 require 'yaml'
@@ -308,7 +307,7 @@ class MercadoPago
 
 		def exec(method, uri, data, content_type)
 			if not data.nil? and content_type == MIME_JSON
-				data = data.to_json
+				data = JSON.dump(data)
 			end
 
 			headers = {
