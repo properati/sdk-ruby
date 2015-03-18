@@ -6,10 +6,10 @@
 
 require 'rubygems'
 require 'uri'
-require 'net/https'
 require 'yaml'
 require 'version'
-require 'ssl_options_patch'
+require 'httpclient'
+require 'cgi'
 
 class MercadoPago
 	def initialize(*args)
@@ -48,9 +48,9 @@ class MercadoPago
 				'client_secret' => @client_secret
 			}
 
-			@access_data = @rest_client.post("/oauth/token", build_query(app_client_values), RestClient::MIME_FORM)
+			@access_data = @rest_client.post("/oauth/token", app_client_values, RestClient::MIME_FORM)
 
-			if @access_data['status'] == "200"
+			if @access_data['status'] == 200
 				@access_data = @access_data["response"]
 				@access_data['access_token']
 			else
@@ -293,38 +293,45 @@ class MercadoPago
 		API_BASE_URL = URI.parse('https://api.mercadopago.com')
 
 		def initialize(debug_logger=nil)
-			@http = Net::HTTP.new(API_BASE_URL.host, API_BASE_URL.port)
-
-			if API_BASE_URL.scheme == "https" # enable SSL/TLS
-				@http.use_ssl = true
-				@http.ssl_options = OpenSSL::SSL::OP_NO_SSLv3 # explicitly tell OpenSSL not to use SSL3
-			end
-
-			@http.set_debug_output debug_logger if debug_logger
+			@http = HTTPClient.new
+			#@http.set_debug_output debug_logger if debug_logger
 		end
 
 		def set_debug_logger(debug_logger)
 			@http.set_debug_output debug_logger
 		end
 
-		def exec(method, uri, data, content_type)
-			if not data.nil? and content_type == MIME_JSON
-				data = JSON.dump(data)
-			end
+    def exec(method, uri, body, content_type)
+      header = {
+        'User-Agent' => "MercadoPago Ruby SDK v" + MERCADO_PAGO_VERSION,
+        'Content-type' => content_type,
+        'Accept' => MIME_JSON
+      }
 
-			headers = {
-				'User-Agent' => "MercadoPago Ruby SDK v" + MERCADO_PAGO_VERSION,
-				'Content-type' => content_type,
-				'Accept' => MIME_JSON
-			}
+      # Fix params for HTTPClient#request:
+      path, query_params = uri.to_s.split('?')
+      url = "#{API_BASE_URL}#{path}"
+      query = CGI.parse(query_params.to_s)
 
-			api_result = @http.send_request(method, uri, data, headers)
+      # Send body as JSON based on content type
+      body = JSON.dump(body) if body && content_type == MIME_JSON
 
-			{
-				"status" => api_result.code,
-				"response" => JSON.parse(api_result.body)
-			}
-		end
+      #puts "****"
+      #puts "method:  #{method.inspect}"
+      #puts "url:     #{url.inspect}"
+      #puts "query:   #{query.inspect}"
+      #puts "body:    #{body.inspect}"
+      #puts "header: #{header.inspect}"
+      #puts "****"
+
+      api_result = @http.request(method, url,
+                                 query: query,
+                                 body: body,
+                                 header: header)
+
+      { "status" => api_result.code,
+        "response" => JSON.parse(api_result.body) }
+    end
 
 		def get(uri, content_type=MIME_JSON)
 			exec("GET", uri, nil, content_type)
