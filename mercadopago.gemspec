@@ -15,6 +15,7 @@ Gem::Specification.new do |gem|
   gem.require_paths = %w(lib)
 
   gem.add_dependency 'json'
+  gem.add_dependency 'httpclient'
 
   gem.add_development_dependency 'pry'
   gem.add_development_dependency 'rake'

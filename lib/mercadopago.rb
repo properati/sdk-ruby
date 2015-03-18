@@ -11,6 +11,7 @@ require 'net/https'
 require 'yaml'
 require 'version'
 require 'ssl_options_patch'
+require 'httpclient'
 
 class MercadoPago
 	def initialize(*args)
@@ -51,7 +52,7 @@ class MercadoPago
 
 			@access_data = @rest_client.post("/oauth/token", build_query(app_client_values), RestClient::MIME_FORM)
 
-			if @access_data['status'] == "200"
+			if @access_data['status'] == 200
 				@access_data = @access_data["response"]
 				@access_data['access_token']
 			else
@@ -294,14 +295,8 @@ class MercadoPago
 		API_BASE_URL = URI.parse('https://api.mercadopago.com')
 
 		def initialize(debug_logger=nil)
-			@http = Net::HTTP.new(API_BASE_URL.host, API_BASE_URL.port)
-
-			if API_BASE_URL.scheme == "https" # enable SSL/TLS
-				@http.use_ssl = true
-				@http.ssl_options = OpenSSL::SSL::OP_NO_SSLv3 # explicitly tell OpenSSL not to use SSL3
-			end
-
-			@http.set_debug_output debug_logger if debug_logger
+			@http = HTTPClient.new
+			#@http.set_debug_output debug_logger if debug_logger
 		end
 
 		def set_debug_logger(debug_logger)
@@ -319,7 +314,20 @@ class MercadoPago
 				'Accept' => MIME_JSON
 			}
 
-			api_result = @http.send_request(method, uri, data, headers)
+			# Fix params for HTTPClient#request:
+			path, query_params = uri.to_s.split('?')
+			url = "#{API_BASE_URL}#{path}"
+
+      require 'cgi'
+      query = CGI.parse(query_params.to_s)
+      query = CGI.parse(data.to_s) unless query.any?
+
+			puts "method: #{method.inspect}"
+			puts "url: #{url.inspect}"
+			puts "query: #{query.inspect}"
+			puts "headers: #{headers.inspect}"
+
+			api_result = @http.request(method, url, query: query, headers: headers)
 
 			{
 				"status" => api_result.code,
